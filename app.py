@@ -64,26 +64,66 @@ def is_valid_youtube_url(url):
 
 def get_video_info(url):
     """Extract video information without downloading"""
-    try:
-        ydl_opts = {
+    
+    # Try multiple configurations for maximum compatibility
+    configs = [
+        # Configuration 1: Most compatible
+        {
             'quiet': True,
             'no_warnings': True,
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            
-            return {
-                'title': info.get('title', 'Titre non disponible'),
-                'duration': info.get('duration', 0),
-                'uploader': info.get('uploader', 'Inconnu'),
-                'view_count': info.get('view_count', 0),
-                'thumbnail': info.get('thumbnail', ''),
-                'id': info.get('id', '')
+            'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios'],
+                    'skip': ['dash', 'hls']
+                }
             }
-    except Exception as e:
-        logger.error(f"Error extracting video info: {str(e)}")
-        return None
+        },
+        # Configuration 2: Android fallback
+        {
+            'quiet': True,
+            'no_warnings': True,
+            'user_agent': 'com.google.android.youtube/19.09.36 (Linux; U; Android 11) gzip',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android'],
+                    'skip': ['dash']
+                }
+            }
+        },
+        # Configuration 3: Basic web fallback
+        {
+            'quiet': True,
+            'no_warnings': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }
+    ]
+    
+    for i, ydl_opts in enumerate(configs):
+        try:
+            logger.debug(f"Trying configuration {i+1} for URL: {url}")
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+                if info:
+                    logger.debug(f"Successfully extracted info with config {i+1}: {info.get('title', 'Unknown')}")
+                    
+                    return {
+                        'title': info.get('title', 'Titre non disponible'),
+                        'duration': info.get('duration', 0),
+                        'uploader': info.get('uploader', 'Inconnu'),
+                        'view_count': info.get('view_count', 0),
+                        'thumbnail': info.get('thumbnail', ''),
+                        'id': info.get('id', '')
+                    }
+                    
+        except Exception as e:
+            logger.warning(f"Configuration {i+1} failed: {str(e)}")
+            continue
+    
+    logger.error(f"All configurations failed for URL: {url}")
+    return None
 
 def download_and_convert(url, progress_id):
     """Download and convert YouTube video to MP3"""
@@ -92,7 +132,7 @@ def download_and_convert(url, progress_id):
         downloads_dir = os.path.join(os.getcwd(), 'downloads')
         os.makedirs(downloads_dir, exist_ok=True)
         
-        # Configure yt-dlp options
+        # Configure yt-dlp options with iOS client for better compatibility
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': os.path.join(downloads_dir, '%(title)s.%(ext)s'),
@@ -104,6 +144,13 @@ def download_and_convert(url, progress_id):
             'progress_hooks': [ProgressHook(progress_id)],
             'quiet': False,
             'no_warnings': False,
+            'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['ios'],
+                    'skip': ['dash', 'hls']
+                }
+            }
         }
         
         conversion_progress[progress_id] = {
@@ -186,7 +233,11 @@ def validate_url():
             
         video_info = get_video_info(url)
         if not video_info:
-            return jsonify({'error': 'Impossible de récupérer les informations de la vidéo'}), 400
+            return jsonify({
+                'error': 'Impossible de récupérer les informations de la vidéo',
+                'details': 'Restrictions YouTube sur serveurs cloud. Essayez une vidéo publique récente.',
+                'suggestion': 'Certaines vidéos fonctionnent mieux que d\'autres sur les serveurs hébergés.'
+            }), 400
             
         return jsonify({
             'valid': True,

@@ -126,8 +126,17 @@ SESSION_SECRET=votre-clé-secrète-unique
 
 ### Problèmes courants
 1. **"URL invalide"** : Vérifiez que l'URL est bien une URL YouTube
-2. **"Conversion échouée"** : La vidéo peut être protégée ou indisponible
-3. **"Fichier non trouvé"** : Réessayez la conversion, le fichier a peut-être expiré
+2. **"Could not extract video information"** : Restrictions YouTube sur serveurs cloud Replit
+   - Essayez avec une vidéo plus récente ou populaire
+   - Certaines vidéos passent mieux que d'autres
+   - Considérez un hébergement VPS pour plus de fiabilité
+3. **"Conversion échouée"** : La vidéo peut être protégée ou indisponible
+4. **"Fichier non trouvé"** : Réessayez la conversion, le fichier a peut-être expiré
+
+### Limitations connues des serveurs cloud
+- **YouTube restreint l'accès** depuis les serveurs cloud comme Replit
+- **Taux de succès variable** selon le type de vidéo
+- **Alternative recommandée** : VPS personnel ou hébergement dédié
 
 ### Support
 Pour tout problème, vérifiez d'abord que :
