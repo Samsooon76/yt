@@ -7,6 +7,8 @@ A Flask-based web application that allows users to convert YouTube videos to MP3
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Target deployment: Hostinger hosting
+iOS Shortcuts integration: Required for quick music downloads
 
 ## System Architecture
 

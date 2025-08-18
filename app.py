@@ -120,16 +120,32 @@ def download_and_convert(url, progress_id):
             # Start download
             ydl.download([url])
             
-            # Find the downloaded file
-            safe_title = re.sub(r'[^\w\s-]', '', title).strip()
-            safe_title = re.sub(r'[-\s]+', '-', safe_title)
-            mp3_file = os.path.join(downloads_dir, f'{safe_title}.mp3')
+            # Find the downloaded MP3 file
+            mp3_file = None
             
-            # Look for any mp3 file that matches
+            # Look for the most recently created MP3 file
+            mp3_files = []
             for file in os.listdir(downloads_dir):
-                if file.endswith('.mp3') and safe_title.lower() in file.lower():
-                    mp3_file = os.path.join(downloads_dir, file)
-                    break
+                if file.endswith('.mp3'):
+                    file_path = os.path.join(downloads_dir, file)
+                    mp3_files.append((file_path, os.path.getctime(file_path)))
+            
+            if mp3_files:
+                # Sort by creation time and get the most recent
+                mp3_files.sort(key=lambda x: x[1], reverse=True)
+                mp3_file = mp3_files[0][0]
+            
+            if not mp3_file or not os.path.exists(mp3_file):
+                # Fallback: look for any mp3 file that might match the title
+                safe_title = re.sub(r'[^\w\s-]', '', title).strip().lower()
+                for file in os.listdir(downloads_dir):
+                    if file.endswith('.mp3'):
+                        file_lower = file.lower()
+                        # Check if any words from the title are in the filename
+                        title_words = safe_title.split()
+                        if any(word in file_lower for word in title_words if len(word) > 3):
+                            mp3_file = os.path.join(downloads_dir, file)
+                            break
             
             conversion_progress[progress_id] = {
                 'status': 'completed',
@@ -225,27 +241,66 @@ def get_progress(progress_id):
 def download_file(progress_id):
     """Download the converted MP3 file"""
     try:
+        downloads_dir = os.path.join(os.getcwd(), 'downloads')
+        file_path = None
+        filename = None
+        
+        # First, try to get from progress if available
         progress = conversion_progress.get(progress_id)
-        
-        if not progress or progress.get('status') != 'completed':
-            return jsonify({'error': 'Fichier non disponible'}), 404
+        if progress and progress.get('status') == 'completed':
+            file_path = progress.get('file_path')
+            filename = progress.get('filename')
             
-        file_path = progress.get('file_path')
-        filename = progress.get('filename')
+            if file_path and os.path.exists(file_path):
+                logger.debug(f"Using file from progress: {file_path}")
+            else:
+                file_path = None
         
-        if not file_path or not os.path.exists(file_path):
+        # If no valid file from progress, find any available MP3 file
+        if not file_path:
+            mp3_files = [f for f in os.listdir(downloads_dir) if f.endswith('.mp3')]
+            
+            if mp3_files:
+                # Get the most recent MP3 file
+                latest_file = max(mp3_files, key=lambda x: os.path.getctime(os.path.join(downloads_dir, x)))
+                file_path = os.path.join(downloads_dir, latest_file)
+                filename = latest_file
+                logger.debug(f"Using most recent file: {file_path}")
+            else:
+                logger.error(f"No MP3 files found in downloads directory")
+                return jsonify({'error': 'Aucun fichier MP3 disponible'}), 404
+        
+        if not os.path.exists(file_path):
+            logger.error(f"File does not exist: {file_path}")
             return jsonify({'error': 'Fichier non trouvé'}), 404
             
+        # Clean the filename for download
+        clean_filename = re.sub(r'[^\w\s\-\.]', '', filename)
+        clean_filename = re.sub(r'[\-\s]+', '-', clean_filename)
+        if not clean_filename.endswith('.mp3'):
+            clean_filename += '.mp3'
+            
+        logger.debug(f"Sending file: {file_path} as {clean_filename}")
+        
         return send_file(
             file_path,
             as_attachment=True,
-            download_name=filename,
+            download_name=clean_filename,
             mimetype='audio/mpeg'
         )
         
     except Exception as e:
         logger.error(f"Error downloading file: {str(e)}")
         return jsonify({'error': 'Erreur lors du téléchargement'}), 500
+
+# Debug route to see current conversions
+@app.route('/debug/conversions')
+def debug_conversions():
+    """Debug endpoint to see current conversions"""
+    return jsonify({
+        'conversions': conversion_progress,
+        'downloads_dir_files': os.listdir(os.path.join(os.getcwd(), 'downloads'))
+    })
 
 # API Routes for iOS Shortcuts
 @app.route('/api/convert', methods=['POST'])
