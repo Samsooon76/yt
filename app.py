@@ -28,6 +28,36 @@ def _detect_ffmpeg_path():
         return local_path
     return None
 
+# Optional YouTube cookies support (to bypass bot/age restrictions)
+_cookies_cached_path = None
+
+def _resolve_cookies_file():
+    global _cookies_cached_path
+    if _cookies_cached_path is not None:
+        return _cookies_cached_path
+
+    # Priority: explicit file path
+    cookies_path = os.environ.get("COOKIES_FILE")
+    if cookies_path and os.path.isfile(cookies_path):
+        _cookies_cached_path = cookies_path
+        return _cookies_cached_path
+
+    # Base64 content in env var
+    cookies_b64 = os.environ.get("COOKIES_B64")
+    if cookies_b64:
+        try:
+            import base64
+            os.makedirs(os.path.join(os.getcwd(), 'cookies'), exist_ok=True)
+            target = os.path.join(os.getcwd(), 'cookies', 'cookies.txt')
+            with open(target, 'wb') as f:
+                f.write(base64.b64decode(cookies_b64))
+            _cookies_cached_path = target
+            return _cookies_cached_path
+        except Exception as e:
+            logger.warning(f"Failed to load cookies from COOKIES_B64: {e}")
+            return None
+    return None
+
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -117,37 +147,46 @@ def get_video_info(url):
     """Extract video information without downloading"""
     
     # Try multiple configurations for maximum compatibility
+    cookies_file = _resolve_cookies_file()
+    common_headers = {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+        'Accept-Language': os.environ.get('ACCEPT_LANGUAGE', 'en-US,en;q=0.9,fr-FR;q=0.8')
+    }
+
     configs = [
         # Configuration 1: Most compatible
         {
             'quiet': True,
             'no_warnings': True,
-            'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+            'http_headers': common_headers,
             'extractor_args': {
                 'youtube': {
                     'player_client': ['ios'],
                     'skip': ['dash', 'hls']
                 }
-            }
+            },
+            **({'cookiefile': cookies_file} if cookies_file else {})
         },
         # Configuration 2: Android fallback
         {
             'quiet': True,
             'no_warnings': True,
-            'user_agent': 'com.google.android.youtube/19.09.36 (Linux; U; Android 11) gzip',
+            'http_headers': {**common_headers, 'User-Agent': 'com.google.android.youtube/19.09.36 (Linux; U; Android 11) gzip'},
             'extractor_args': {
                 'youtube': {
                     'player_client': ['android'],
                     'skip': ['dash']
                 }
-            }
+            },
+            **({'cookiefile': cookies_file} if cookies_file else {})
         },
         # Configuration 3: Basic web fallback
         {
             'quiet': True,
             'no_warnings': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        }
+            'http_headers': {**common_headers, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
+            **({'cookiefile': cookies_file} if cookies_file else {})
+        },
     ]
     
     for i, ydl_opts in enumerate(configs):
@@ -200,13 +239,17 @@ def download_and_convert(url, progress_id):
             'progress_hooks': [ProgressHook(progress_id)],
             'quiet': False,
             'no_warnings': False,
-            'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1',
+                'Accept-Language': os.environ.get('ACCEPT_LANGUAGE', 'en-US,en;q=0.9,fr-FR;q=0.8')
+            },
             'extractor_args': {
                 'youtube': {
                     'player_client': ['ios'],
                     'skip': ['dash', 'hls']
                 }
-            }
+            },
+            **({'cookiefile': _resolve_cookies_file()} if _resolve_cookies_file() else {})
         }
         
         conversion_progress[progress_id] = {
