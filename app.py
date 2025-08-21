@@ -78,20 +78,40 @@ class ProgressHook:
                 'message': 'Conversion en cours...'
             }
 
-def is_valid_youtube_url(url):
-    """Validate if the URL is a valid YouTube URL"""
-    youtube_patterns = [
-        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
-        r'(?:https?://)?(?:www\.)?youtu\.be/[\w-]+',
-        r'(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+',
-        r'(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+',
-        r'(?:https?://)?(?:m\.)?youtube\.com/watch\?v=[\w-]+'
-    ]
-    
-    for pattern in youtube_patterns:
-        if re.match(pattern, url):
-            return True
-    return False
+def normalize_url(url: str) -> str:
+    url = url.strip()
+    if not re.match(r'^https?://', url):
+        url = 'https://' + url
+    return url
+
+def is_valid_youtube_url(url: str) -> bool:
+    """Validate if the URL is a valid YouTube or youtu.be URL, including Shorts."""
+    try:
+        url = normalize_url(url)
+        parsed = urlparse(url)
+        host = parsed.netloc.lower()
+        path = parsed.path.rstrip('/')
+        qs = parse_qs(parsed.query)
+
+        if 'youtube.com' in host or 'youtu.be' in host or 'm.youtube.com' in host:
+            # youtu.be shortlinks: path contains the ID
+            if 'youtu.be' in host:
+                return bool(path.strip('/'))
+
+            # youtube.com paths
+            p = path.lower()
+            if p.startswith('/watch'):
+                return 'v' in qs and len(qs.get('v', [''])[0]) > 0
+            if p.startswith('/shorts/'):
+                return len(p.split('/shorts/', 1)[-1]) > 0
+            if p.startswith('/embed/') or p.startswith('/v/') or p.startswith('/live/'):
+                return True
+            # Accept music.youtube.com/watch?v=...
+            if p == '/watch' and 'v' in qs:
+                return True
+        return False
+    except Exception:
+        return False
 
 def get_video_info(url):
     """Extract video information without downloading"""
@@ -259,7 +279,7 @@ def validate_url():
     """Validate YouTube URL and return video info"""
     try:
         data = request.get_json()
-        url = data.get('url', '').strip()
+        url = normalize_url(data.get('url', '').strip())
         
         if not url:
             return jsonify({'error': 'URL manquante'}), 400
@@ -269,16 +289,22 @@ def validate_url():
             
         video_info = get_video_info(url)
         if not video_info:
+            # Autoriser à continuer malgré l'échec d'extraction d'infos (meilleure UX)
+            video_info = {
+                'title': 'Vidéo YouTube',
+                'duration': 0,
+                'uploader': 'Inconnu',
+                'view_count': 0,
+                'thumbnail': '',
+                'id': ''
+            }
             return jsonify({
-                'error': 'Impossible de récupérer les informations de la vidéo',
-                'details': 'Restrictions YouTube sur serveurs cloud. Essayez une vidéo publique récente.',
-                'suggestion': 'Certaines vidéos fonctionnent mieux que d\'autres sur les serveurs hébergés.'
-            }), 400
-            
-        return jsonify({
-            'valid': True,
-            'info': video_info
-        })
+                'valid': True,
+                'info': video_info,
+                'warning': 'Infos vidéo non récupérées, conversion possible quand même.'
+            })
+        
+        return jsonify({'valid': True, 'info': video_info})
         
     except Exception as e:
         logger.error(f"Error validating URL: {str(e)}")
@@ -289,7 +315,7 @@ def convert_video():
     """Start video conversion"""
     try:
         data = request.get_json()
-        url = data.get('url', '').strip()
+        url = normalize_url(data.get('url', '').strip())
         
         if not url or not is_valid_youtube_url(url):
             return jsonify({'error': 'URL YouTube invalide'}), 400
@@ -396,9 +422,9 @@ def api_convert():
     try:
         # Handle both JSON and form data
         if request.is_json:
-            url = request.json.get('url', '').strip()
+            url = normalize_url(request.json.get('url', '').strip())
         else:
-            url = request.form.get('url', '').strip()
+            url = normalize_url(request.form.get('url', '').strip())
             
         if not url:
             return jsonify({'error': 'URL required', 'success': False}), 400
@@ -437,9 +463,9 @@ def api_info():
     """API endpoint to get video information only"""
     try:
         if request.is_json:
-            url = request.json.get('url', '').strip()
+            url = normalize_url(request.json.get('url', '').strip())
         else:
-            url = request.form.get('url', '').strip()
+            url = normalize_url(request.form.get('url', '').strip())
             
         if not url:
             return jsonify({'error': 'URL required', 'success': False}), 400

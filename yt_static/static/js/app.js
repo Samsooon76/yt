@@ -126,7 +126,8 @@ class YouTubeConverter {
         this.validateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
         try {
-            const response = await fetch('/validate', {
+            const API_BASE = (window.API_BASE || '').replace(/\/$/, '');
+            const response = await fetch(`${API_BASE}/validate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -184,7 +185,8 @@ class YouTubeConverter {
         this.convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Conversion en cours...';
 
         try {
-            const response = await fetch('/convert', {
+            const API_BASE = (window.API_BASE || '').replace(/\/$/, '');
+            const response = await fetch(`${API_BASE}/convert`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -218,7 +220,8 @@ class YouTubeConverter {
     startProgressTracking() {
         this.progressInterval = setInterval(async () => {
             try {
-                const response = await fetch(`/progress/${this.currentProgressId}`);
+                const API_BASE = (window.API_BASE || '').replace(/\/$/, '');
+                const response = await fetch(`${API_BASE}/progress/${this.currentProgressId}`);
                 const data = await response.json();
 
                 this.updateProgress(data);
@@ -266,7 +269,8 @@ class YouTubeConverter {
         this.downloadContainer.style.display = 'block';
         
         // Set download link
-        this.downloadLink.href = `/download/${this.currentProgressId}`;
+        const API_BASE = (window.API_BASE || '').replace(/\/$/, '');
+        this.downloadLink.href = `${API_BASE}/download/${this.currentProgressId}`;
         
         this.downloadContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         this.resetConvertButton();
