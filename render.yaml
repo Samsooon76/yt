@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: yt-mp3-backend
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ENABLE_CORS
+        value: true
+      - key: CORS_ORIGINS
+        value: https://crayonupdater.eu
+

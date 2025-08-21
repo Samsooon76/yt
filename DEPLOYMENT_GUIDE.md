@@ -10,6 +10,7 @@ Créez ces dossiers et fichiers sur votre hébergement Hostinger :
 /public_html/
 ├── app.py                          # Application principale
 ├── main.py                         # Point d'entrée
+├── passenger_wsgi.py               # Entrée WSGI (Passenger)
 ├── hostinger_requirements.txt      # Dépendances Python
 ├── templates/
 │   └── index.html                 # Interface web
@@ -22,12 +23,21 @@ Créez ces dossiers et fichiers sur votre hébergement Hostinger :
     └── .gitkeep
 ```
 
+Optionnel (si vous n'avez pas ffmpeg côté serveur):
+
+```
+/public_html/
+└── bin/
+    └── ffmpeg                     # Binaire ffmpeg téléversé par vos soins
+```
+
 ### 2. Configuration des variables d'environnement
 
 Dans le panneau de contrôle Hostinger, ajoutez ces variables :
 
 ```
 SESSION_SECRET=votre-clé-secrète-très-longue-et-complexe
+FFMPEG_PATH=/home/USER/domains/votre-domaine.com/public_html/bin/ffmpeg
 ```
 
 ### 3. Installation des dépendances
@@ -40,19 +50,28 @@ pip install -r hostinger_requirements.txt
 
 ## Configuration du serveur web
 
-### Option 1 : Apache + mod_wsgi
+### Option recommandée : hPanel > Applications Python (Passenger)
 
-Créez un fichier `.htaccess` :
+1) Dans hPanel > Avancé > Applications Python, créez une application:
+- Version Python: choisissez celle supportée (ex: 3.10+)
+- Dossier de l'application: `public_html`
+- Fichier de démarrage: `passenger_wsgi.py`
+- Point d'entrée WSGI: `application`
 
-```apache
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ app.py/$1 [QSA,L]
+2) Cliquez sur « Installer les dépendances » et indiquez:
+```
+hostinger_requirements.txt
 ```
 
-### Option 2 : Gunicorn (si supporté)
+3) Ajoutez les variables d'environnement (SESSION_SECRET, FFMPEG_PATH si nécessaire).
 
-```bash
+4) Redémarrez l'application.
+
+Vos assets `static/` et `templates/` sont servis par Flask. Pas besoin de configuration .htaccess spécifique dans ce mode.
+
+### Option alternative : Gunicorn (VPS ou accès SSH avancé)
+
+```
 gunicorn --bind 0.0.0.0:8000 main:app
 ```
 
@@ -65,14 +84,17 @@ chmod 644 *.py
 chmod 644 templates/*.html
 chmod 644 static/css/*.css
 chmod 644 static/js/*.js
+chmod 755 bin/ffmpeg   # si vous avez téléversé un binaire ffmpeg
 ```
 
 ### Dépendances système requises
 
-Vérifiez que ces packages sont installés :
+Idéalement disponibles côté serveur :
 - `python3`
 - `ffmpeg` (pour la conversion audio)
 - `python3-pip`
+
+Si `ffmpeg` n'est pas installé côté serveur, téléversez un binaire statique dans `public_html/bin/ffmpeg` et définissez `FFMPEG_PATH`.
 
 ## Structure finale de l'URL
 
@@ -100,6 +122,8 @@ curl -X POST https://votre-domaine.com/api/convert \
   -H "Content-Type: application/json" \
   -d '{"url":"https://youtube.com/watch?v=EXAMPLE"}'
 ```
+
+Si l'API renvoie une erreur liée à ffmpeg, vérifiez `FFMPEG_PATH` ou la présence de ffmpeg côté serveur.
 
 ### 3. Vérification des logs
 Consultez les logs d'erreur pour diagnostiquer les problèmes.

@@ -11,11 +11,6 @@ import time
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.wrappers.response import Response
-try:
-    from flask_cors import CORS
-    _CORS_AVAILABLE = True
-except Exception:
-    _CORS_AVAILABLE = False
 
 # Optional FFmpeg path detection
 def _detect_ffmpeg_path():
@@ -41,14 +36,6 @@ if BASE_PATH and not BASE_PATH.startswith("/"):
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
-# Enable CORS when serving API for a static site on another domain
-if os.environ.get("ENABLE_CORS", "false").lower() in ("1", "true", "yes") and _CORS_AVAILABLE:
-    origins = os.environ.get("CORS_ORIGINS", "*")
-    try:
-        CORS(app, resources={r"/*": {"origins": origins}})
-    except Exception:
-        pass
 
 # Global dictionary to store conversion progress
 conversion_progress = {}

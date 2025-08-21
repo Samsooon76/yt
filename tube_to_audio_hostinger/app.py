@@ -9,13 +9,6 @@ import tempfile
 import threading
 import time
 from werkzeug.middleware.proxy_fix import ProxyFix
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.wrappers.response import Response
-try:
-    from flask_cors import CORS
-    _CORS_AVAILABLE = True
-except Exception:
-    _CORS_AVAILABLE = False
 
 # Optional FFmpeg path detection
 def _detect_ffmpeg_path():
@@ -32,23 +25,10 @@ def _detect_ffmpeg_path():
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Base path for subdirectory deployments (e.g., /yt)
-BASE_PATH = os.environ.get("BASE_PATH", "").strip()
-if BASE_PATH and not BASE_PATH.startswith("/"):
-    BASE_PATH = f"/{BASE_PATH}"
-
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
-# Enable CORS when serving API for a static site on another domain
-if os.environ.get("ENABLE_CORS", "false").lower() in ("1", "true", "yes") and _CORS_AVAILABLE:
-    origins = os.environ.get("CORS_ORIGINS", "*")
-    try:
-        CORS(app, resources={r"/*": {"origins": origins}})
-    except Exception:
-        pass
 
 # Global dictionary to store conversion progress
 conversion_progress = {}
@@ -462,13 +442,3 @@ def api_info():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-# Expose WSGI application, optionally mounted under BASE_PATH
-def _not_found_app(environ, start_response):
-    resp = Response('Not Found', status=404)
-    return resp(environ, start_response)
-
-if BASE_PATH:
-    application = DispatcherMiddleware(_not_found_app, {BASE_PATH: app})
-else:
-    application = app
